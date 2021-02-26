@@ -1,102 +1,58 @@
 #include <ESP8266WiFi.h>
 #include <espnow.h>
 #include <EEPROM.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 
-#define MODEL 'S'
+#define MODEL 'M'
+
+typedef struct struct_message {
+	uint16_t level;
+	bool fan;
+} struct_message;
+struct_message data;
+uint32_t dieTimer(0);
+uint8_t dieCounter(0);
 
 #if MODEL == 'M'
-uint8_t broadcastAddress[] = { 0xF4, 0xCF, 0xA2, 0xD1, 0x82, 0x04 };
+//#define RETRYMAX 20 
+uint8_t broadcastAddress[] = { 0x40, 0xF5, 0x20, 0x24, 0x5A, 0x9E };
 uint32_t HCSR04Timer(600000), sendTimer(0);
-const uint8_t trigPin(12), echoPin(13);
+const uint8_t trigPin(4), echoPin(5);
 uint32_t duration(0), distance(0);
 uint8_t HCSR04Iter(0), sendTry(0);
-bool send(false);
+bool send(true);
 #endif
 
 #if MODEL == 'S'
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "pitches.h"
 /*************************************************
  Melody credits: https://www.youtube.com/redirect?q=https%3A%2F%2Fwww.drive.google.com%2Fdrive%2Ffolders%2F1yH2TnQntyjxTACFiJCyzE9jY4F3DJgM0%3Fusp%3Dsharing&redir_token=sOm1FFj-ZK5Nn2zLavHViFT8Ewd8MTU4OTI3OTkyOEAxNTg5MTkzNTI4&v=nVVzBPgpCsM&event=video_description
  *************************************************/
 int melody[] = {
-  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
-  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
-  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
-  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
-  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
-  NOTE_D5, NOTE_D5, NOTE_D5, NOTE_D5,
-  NOTE_C5, NOTE_C5, NOTE_C5, NOTE_C5,
-  NOTE_F5, NOTE_F5, NOTE_F5, NOTE_F5,
-  NOTE_G5, NOTE_G5, NOTE_G5, NOTE_G5,
-  NOTE_G5, NOTE_G5, NOTE_G5, NOTE_G5,
-  NOTE_G5, NOTE_G5, NOTE_G5, NOTE_G5,
-  NOTE_C5, NOTE_AS4, NOTE_A4, NOTE_F4,
-  NOTE_G4, 0, NOTE_G4, NOTE_D5,
-  NOTE_C5, 0, NOTE_AS4, 0,
-  NOTE_A4, 0, NOTE_A4, NOTE_A4,
-  NOTE_C5, 0, NOTE_AS4, NOTE_A4,
-  NOTE_G4,0, NOTE_G4, NOTE_AS5,
-  NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5,
-  NOTE_G4,0, NOTE_G4, NOTE_AS5,
-  NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5,
-  NOTE_G4, 0, NOTE_G4, NOTE_D5,
-  NOTE_C5, 0, NOTE_AS4, 0,
-  NOTE_A4, 0, NOTE_A4, NOTE_A4,
-  NOTE_C5, 0, NOTE_AS4, NOTE_A4,
-  NOTE_G4,0, NOTE_G4, NOTE_AS5,
-  NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5,
-  NOTE_G4,0, NOTE_G4, NOTE_AS5,
-  NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5
+  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
+  NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,NOTE_AS4, NOTE_AS4, NOTE_AS4, NOTE_AS4,NOTE_D5, NOTE_D5, NOTE_D5, NOTE_D5,
+  NOTE_C5, NOTE_C5, NOTE_C5, NOTE_C5,NOTE_F5, NOTE_F5, NOTE_F5, NOTE_F5,NOTE_G5, NOTE_G5, NOTE_G5, NOTE_G5,
+  NOTE_G5, NOTE_G5, NOTE_G5, NOTE_G5,NOTE_G5, NOTE_G5, NOTE_G5, NOTE_G5,NOTE_C5, NOTE_AS4, NOTE_A4, NOTE_F4,
+  NOTE_G4, 0, NOTE_G4, NOTE_D5,NOTE_C5, 0, NOTE_AS4, 0,NOTE_A4, 0, NOTE_A4, NOTE_A4,NOTE_C5, 0, NOTE_AS4, NOTE_A4,
+  NOTE_G4,0, NOTE_G4, NOTE_AS5,NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5,NOTE_G4,0, NOTE_G4, NOTE_AS5,NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5,
+  NOTE_G4, 0, NOTE_G4, NOTE_D5,NOTE_C5, 0, NOTE_AS4, 0,NOTE_A4, 0, NOTE_A4, NOTE_A4,NOTE_C5, 0, NOTE_AS4, NOTE_A4,NOTE_G4,0, NOTE_G4, NOTE_AS5,
+  NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5,NOTE_G4,0, NOTE_G4, NOTE_AS5,NOTE_A5, NOTE_AS5, NOTE_A5, NOTE_AS5
 };
 
 int noteDurations[] = {
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
-  4,4,4,4,
+  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
 };
-uint8_t thisNote(0), oledLevel(50), buttonState(0);
+
+uint8_t thisNote(0), oledLevel(10), buttonState(0), editIter(100);
 uint16_t levelMin(0), levelMax(100);
 uint32_t oledTimer(0), piezoTimer(0), buttonTimer(0);
 bool oledFan(true), buttonHandler(false), buttonLongPress(false), alertState(false), preventAlertState(false), alertLED(true), buzzerStatus(true);
 
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 #endif
-
-typedef struct struct_message {
-	uint8_t level;
-	bool fan;
-} struct_message;
-struct_message data;
-uint32_t dieTimer(0);
-uint8_t dieCounter(0);
 
 void preinit() {
 	ESP8266WiFiClass::preinitWiFiOff();
@@ -112,16 +68,18 @@ void setup()
 	Serial.print(F("MAC Address:  "));
 	Serial.println(WiFi.macAddress());
 
+	pinMode(LED_BUILTIN, OUTPUT);
+
 	data.fan = true;
 	data.level = 50;
 
 #if MODEL == '0'
 	EEPROM.begin(512);
-	EEPROM.put(0, (uint16_t)0);
-	EEPROM.put(2, (uint16_t)500);
-	EEPROM[4] = 0;
+	EEPROM.put(0, (uint16_t)20);
+	EEPROM.put(2, (uint16_t)100);
+	EEPROM[4] = 1;
 	if (EEPROM.commit())
-		Serial.println(F("Init success! Please change mode to M or S"));
+		Serial.println(F("Init success! Please change mode to S"));
 	while (true)
 		yield();
 #endif
@@ -143,9 +101,9 @@ void setup()
 	data.level = 50;
 	data.fan = false;
 
-	pinMode(12, OUTPUT);
-	pinMode(13, INPUT);
-	pinMode(5, INPUT);
+	pinMode(trigPin, OUTPUT);
+	pinMode(echoPin, INPUT);
+	pinMode(14, INPUT);
 #endif
 
 #if MODEL == 'S'
@@ -153,7 +111,7 @@ void setup()
 		esp_now_register_recv_cb(OnDataRecv);
 
 		pinMode(12, INPUT);
-		pinMode(13, OUTPUT);
+		pinMode(14, OUTPUT);
 
 		if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
 		{
@@ -199,12 +157,14 @@ void loop()
 		delayMicroseconds(10);
 		digitalWrite(trigPin, LOW);
 		duration = pulseIn(echoPin, HIGH);
-		distance += duration / 58;
+    delay(20);
+		distance += duration / 54;
 		HCSR04Iter++;
 
-		if (HCSR04Iter > 99)
+		if (HCSR04Iter > 9)
 		{
-			uint8_t level(distance / 100);
+			uint16_t level(distance / HCSR04Iter);
+      Serial.println(level);
 			if (data.level != level)
 			{
 				data.level = level;
@@ -215,7 +175,7 @@ void loop()
 		}
 	}
 
-	if (digitalRead(5) == HIGH)
+	if (digitalRead(14) == LOW)
 	{
 		if (data.fan == false)
 		{
@@ -231,17 +191,25 @@ void loop()
 
 	if (send)
 		if ((millis() - sendTimer) > 1000) {
+			digitalWrite(LED_BUILTIN, LOW);
 			esp_now_send(broadcastAddress, (uint8_t *)&data, sizeof(data));
+			#ifdef RETRYMAX
+				if (++sendTry > RETRYMAX)
+					sendTry = send = false;
+			#endif 
 			sendTimer = millis();
-			if (++sendTry > 19)
-				sendTry = send = false;
 		}
+
+	if (millis() > 3600000)
+		ESP.restart();
 #endif
 	
 #if MODEL == 'S'
 	if (buttonHandler) {
 		if (digitalRead(12) == LOW && !buttonLongPress)
 		{
+			if (editIter < 100)
+				editIter = 10;
 			if (alertState)
 				alertState = false;
 			else if (buttonState == 1 || buttonState == 2)
@@ -295,6 +263,7 @@ void loop()
 		else if ((millis() - buttonTimer) > 1000)
 			if (buttonLongPress = digitalRead(12) == LOW ? false : true)
 			{
+				editIter = 10;
 				if (buttonState == 0)
 					buttonState = 1;
 				else if (buttonState == 1 || buttonState == 2)
@@ -304,7 +273,7 @@ void loop()
 				else if (buttonState == 5 || buttonState == 6)
 					buttonState = 7;
 				else if (buttonState == 7 || buttonState == 8)
-					buttonState = 9;
+					buttonState = 10;
 				else if (buttonState == 9 || buttonState == 10)
 					buttonState = 11;
 				else 
@@ -354,7 +323,8 @@ void loop()
 
 		display.drawRect(0, 44, 128, 20, WHITE);
 		display.setCursor(22, 50);
-		if(buttonState == 0)
+		if (buttonState == 0)
+		{
 			if (data.fan)
 				display.print(F("Furnance is ON"));
 			else
@@ -366,8 +336,9 @@ void loop()
 				display.print(F("Furnance is OFF"));
 				oledFan = !oledFan;
 			}
-		
-		drawProgressbar(0, 10, 128, 19, oledLevel);
+
+			drawProgressbar(0, 10, 128, 19, oledLevel);
+		}
 
 		if (buttonState > 0)
 		{
@@ -444,38 +415,41 @@ void loop()
 			}
 			else if (buttonState == 12)
 				buttonState = 11;
+			drawProgressbar(0, 10, 128, 19, editIter * 10);
 		}
 		display.display();
 
 		if (oledLevel < 10)
-			alertLED = true;
+			alertLED = !alertLED;
 		else
 			alertLED = false;
 
 		if (alertLED)
-			digitalWrite(13, HIGH);
+			digitalWrite(14, HIGH);
 		else
-			digitalWrite(13, LOW);
+			digitalWrite(14, LOW);
+
+		if (editIter < 100)
+			if (editIter == 0)
+			{
+				buttonState = 0;
+				editIter = 100;
+			}
+			else
+				--editIter;
 
 		oledTimer = millis();
 	}
-
-	if (oledLevel == 0)
-		if(!preventAlertState)
-			alertState = preventAlertState = true;
-
-	if (oledLevel > 10)
-		preventAlertState = false;
 	
-	if (alertState)
+	if (buzzerStatus && alertState)
 	{
 		if (thisNote < 112) {
 
 			uint16_t noteDuration = 750 / noteDurations[thisNote];
-			tone(14, melody[thisNote++], noteDuration);
+			tone(13, melody[thisNote++], noteDuration);
 			uint16_t pauseBetweenNotes = noteDuration * 1.30;
 			delay(pauseBetweenNotes);
-			noTone(14);
+			noTone(13);
 			piezoTimer = millis();
 		}
 
@@ -505,7 +479,8 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
 	if (sendStatus == 0)
 	{
 		Serial.println(F("Delivery success"));
-		send = false; sendTry = 0;
+		digitalWrite(LED_BUILTIN, HIGH);
+		sendTry = send = false;
 	}
 	else 
 		Serial.println(F("Delivery fail"));
@@ -515,8 +490,26 @@ void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
 #if MODEL == 'S'
 void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
 	memcpy(&data, incomingData, sizeof(data));
-	oledLevel = map(data.level,levelMin,levelMax,0,100);
-	yield();
+	if (data.level > levelMax) data.level = levelMax;
+	if (data.level < levelMin) data.level = levelMin;
+
+	uint8_t lastLevelState = oledLevel;
+	oledLevel = 100 - map(data.level, levelMin, levelMax, 0, 100);
+
+	if (lastLevelState > 10 && oledLevel == 0)
+		oledLevel = lastLevelState;
+
+	oledTimer = millis() + 1001;
+
+	if (oledLevel == 0)
+		if (!preventAlertState) {
+			alertState = preventAlertState = true;
+			piezoTimer = millis() + 600000;
+			thisNote   = 0;
+		}
+
+	if (oledLevel > 10)
+		alertState = preventAlertState = false;
 }
 
 void drawProgressbar(int x, int y, int width, int height, int progress)
